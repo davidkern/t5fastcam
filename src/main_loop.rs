@@ -1,15 +1,18 @@
+use crate::video_frame::VideoFrame;
 use anyhow::{Context, Result};
+use std::borrow::Cow;
+use std::sync::mpsc::{Receiver, TryRecvError};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::Window
+    window::Window,
 };
-use std::borrow::Cow;
-use std::sync::mpsc::{Receiver, TryRecvError};
-use crate::video_frame::VideoFrame;
 
-
-pub async fn run(event_loop: EventLoop<()>, window: Window, video_receiver: Receiver<VideoFrame>) -> Result<()> {
+pub async fn run(
+    event_loop: EventLoop<()>,
+    window: Window,
+    video_receiver: Receiver<VideoFrame>,
+) -> Result<()> {
     let size = window.inner_size();
     let instance = wgpu::Instance::new(wgpu::Backends::all());
     let display_surface = unsafe { instance.create_surface(&window) };
@@ -21,7 +24,7 @@ pub async fn run(event_loop: EventLoop<()>, window: Window, video_receiver: Rece
         })
         .await
         .with_context(|| "Failed to find an appropriate gpu adapter.")?;
-    
+
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
@@ -34,7 +37,19 @@ pub async fn run(event_loop: EventLoop<()>, window: Window, video_receiver: Rece
         )
         .await
         .with_context(|| "Failed to create gpu device.")?;
-    
+
+    let swapchain_format = display_surface.get_supported_formats(&adapter)[0];
+
+    let mut display_config = wgpu::SurfaceConfiguration {
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        format: swapchain_format,
+        width: size.width,
+        height: size.height,
+        present_mode: wgpu::PresentMode::Fifo,
+    };
+
+    display_surface.configure(&device, &display_config);
+
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
@@ -45,8 +60,6 @@ pub async fn run(event_loop: EventLoop<()>, window: Window, video_receiver: Rece
         bind_group_layouts: &[],
         push_constant_ranges: &[],
     });
-
-    let swapchain_format = display_surface.get_supported_formats(&adapter)[0];
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
@@ -67,19 +80,15 @@ pub async fn run(event_loop: EventLoop<()>, window: Window, video_receiver: Rece
         multiview: None,
     });
 
-    let mut config = wgpu::SurfaceConfiguration {
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: swapchain_format,
-        width: size.width,
-        height: size.height,
-        present_mode: wgpu::PresentMode::Fifo,
-    };
-
-    display_surface.configure(&device, &config);
-
     event_loop.run(move |event, _, control_flow| {
         // take ownership of resources to ensure they are properly cleaned up on exit
-        let _ = (&instance, &adapter, &shader, &pipeline_layout, &video_receiver);
+        let _ = (
+            &instance,
+            &adapter,
+            &shader,
+            &pipeline_layout,
+            &video_receiver,
+        );
 
         let mut video_frame = None;
 
@@ -87,12 +96,12 @@ pub async fn run(event_loop: EventLoop<()>, window: Window, video_receiver: Rece
             Ok(frame) => {
                 println!("frame {}", frame.sequence);
                 video_frame = Some(frame);
-            },
+            }
             Err(TryRecvError::Disconnected) => {
                 *control_flow = ControlFlow::Exit;
                 return;
-            },
-            Err(TryRecvError::Empty) => {},
+            }
+            Err(TryRecvError::Empty) => {}
         }
 
         *control_flow = ControlFlow::Poll;
@@ -103,12 +112,12 @@ pub async fn run(event_loop: EventLoop<()>, window: Window, video_receiver: Rece
                 ..
             } => {
                 // Reconfigure the display_surface to the new size
-                config.width = size.width;
-                config.height = size.height;
-                display_surface.configure(&device, &config);
+                display_config.width = size.width;
+                display_config.height = size.height;
+                display_surface.configure(&device, &display_config);
                 window.request_redraw();
             }
-            
+
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..
@@ -118,12 +127,13 @@ pub async fn run(event_loop: EventLoop<()>, window: Window, video_receiver: Rece
                 let frame = display_surface
                     .get_current_texture()
                     .expect("Failed to acquire next swap chain texture");
-                
+
                 let view = frame
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
-                
-                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+                let mut encoder =
+                    device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
                 {
                     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

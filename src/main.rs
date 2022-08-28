@@ -4,25 +4,18 @@ mod video_capture;
 mod video_frame;
 
 use anyhow::{Context, Result};
-use device_info::show_device_info;
-use video_capture::run_capture_thread;
-use video_frame::VideoFrame;
 use clap::Parser;
-use v4l::{
-    Device,
-    fraction::Fraction,
-    video::Capture,
-    video::capture::parameters::{
-        Modes,
-        Parameters
-    },
-    parameters::Capabilities,
-};
-use winit::{
-    event_loop::EventLoop,
-};
+use device_info::show_device_info;
 use std::sync::mpsc::sync_channel;
-
+use v4l::{
+    fraction::Fraction,
+    parameters::Capabilities,
+    video::capture::parameters::{Modes, Parameters},
+    video::Capture,
+    Device,
+};
+use video_capture::run_capture_thread;
+use winit::event_loop::EventLoop;
 
 /// Records video from a high speed monochrome camera, processing
 /// frames through a virtual color wheel to allow through-the-glasses
@@ -45,11 +38,13 @@ fn main() -> Result<()> {
     let device = Device::with_path(&args.device)
         .with_context(|| format!("Failed to open device {}", &args.device))?;
 
-    device.set_params(&Parameters {
-        capabilities: Capabilities::TIME_PER_FRAME,
-        modes: Modes::empty(),
-        interval: Fraction::new(1, 120),
-    });
+    device
+        .set_params(&Parameters {
+            capabilities: Capabilities::TIME_PER_FRAME,
+            modes: Modes::empty(),
+            interval: Fraction::new(1, 120),
+        })
+        .with_context(|| "Failt to set parameters")?;
 
     show_device_info(&device)?;
 
@@ -58,11 +53,10 @@ fn main() -> Result<()> {
     run_capture_thread(device, video_sender);
 
     let event_loop = EventLoop::new();
-    let window = winit::window::Window::new(&event_loop)
-        .with_context(|| "Failed to create window.")?;
-    
+    let window =
+        winit::window::Window::new(&event_loop).with_context(|| "Failed to create window.")?;
+
     pollster::block_on(main_loop::run(event_loop, window, video_receiver))?;
 
     Ok(())
 }
-
