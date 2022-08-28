@@ -3,12 +3,15 @@ use v4l::video::Capture;
 use v4l::Device;
 
 /// Show settings and capabilities of the video device
-pub fn show_device_info(device: &Device) -> Result<()> {
+/// Returns the width and height of a frame for the active format
+pub fn show_device_info(device: &Device) -> Result<(u32, u32)> {
     let device_format = device
         .format()
         .with_context(|| "Failed to get device format.")?;
 
     println!("Active format:\n{}", device_format);
+
+    let (width, height) = (device_format.width, device_format.height);
 
     let device_params = device
         .params()
@@ -53,5 +56,5 @@ pub fn show_device_info(device: &Device) -> Result<()> {
         println!();
     }
 
-    Ok(())
+    Ok((width, height))
 }

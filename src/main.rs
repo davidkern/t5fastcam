@@ -46,7 +46,7 @@ fn main() -> Result<()> {
         })
         .with_context(|| "Failt to set parameters")?;
 
-    show_device_info(&device)?;
+    let (width, height) = show_device_info(&device)?;
 
     let (video_sender, video_receiver) = sync_channel(1);
 
@@ -56,7 +56,12 @@ fn main() -> Result<()> {
     let window =
         winit::window::Window::new(&event_loop).with_context(|| "Failed to create window.")?;
 
-    pollster::block_on(main_loop::run(event_loop, window, video_receiver))?;
+    pollster::block_on(main_loop::run(
+        event_loop,
+        window,
+        video_receiver,
+        (width, height),
+    ))?;
 
     Ok(())
 }

@@ -26,6 +26,8 @@ Extract luminance channel from 120fps mjpeg stream and provide raw stream on fak
 Run against raw stream
 `cargo run -- /dev/video2`
 
+If something goes wrong and ffmpeg gives the error "Could not write header for output file", then teardown the loopback with `sudo rmmod v4l2loopback` and recreate it.
+
 ## License
 
 Copyright 2022 The t5fastcam Authors.
