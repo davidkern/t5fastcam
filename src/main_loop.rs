@@ -7,6 +7,8 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
+use wgpu::util::DeviceExt;
+
 
 pub async fn run(
     event_loop: EventLoop<()>,
@@ -80,6 +82,22 @@ pub async fn run(
         ..Default::default()
     });
 
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+    struct SequenceUniform {
+        sequence: u32,
+    }
+
+    let mut sequence_uniform = SequenceUniform { sequence: 0 };
+
+    let sequence_buffer = device.create_buffer_init(
+        &wgpu::util::BufferInitDescriptor {
+            contents: bytemuck::cast_slice(&[sequence_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            label: Some("sequence_buffer"),
+        }
+    );
+
     let video_bind_group_layout =
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
@@ -99,6 +117,16 @@ pub async fn run(
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }
             ],
             label: Some("video_bind_group_layout"),
         });
@@ -114,6 +142,10 @@ pub async fn run(
                 binding: 1,
                 resource: wgpu::BindingResource::Sampler(&video_texture_sampler),
             },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: sequence_buffer.as_entire_binding(),
+            }
         ],
         label: Some("video_bind_group"),
     });
@@ -142,7 +174,10 @@ pub async fn run(
             entry_point: "fs_main",
             targets: &[Some(swapchain_format.into())],
         }),
-        primitive: wgpu::PrimitiveState::default(),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleStrip,
+            ..Default::default()
+        },
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
         multiview: None,
@@ -177,7 +212,6 @@ pub async fn run(
                 event: WindowEvent::CloseRequested,
                 ..
             } => {
-                println!("close requested");
                 render_enabled = false;
                 *control_flow = ControlFlow::Exit;
                 return;
@@ -191,6 +225,12 @@ pub async fn run(
                 match video_receiver.try_recv() {
                     Ok(frame) => {
                         if render_enabled {
+                            sequence_uniform.sequence = frame.sequence;
+                            queue.write_buffer(
+                                &sequence_buffer,
+                                0,
+                                bytemuck::cast_slice(&[sequence_uniform])
+                            );
                             queue.write_texture(
                                 wgpu::ImageCopyTexture {
                                     texture: &video_texture,
@@ -242,7 +282,7 @@ pub async fn run(
                                 });
                             rpass.set_pipeline(&render_pipeline);
                             rpass.set_bind_group(0, &video_bind_group, &[]);
-                            rpass.draw(0..3, 0..1);
+                            rpass.draw(0..4, 0..1);
                         }
 
                         queue.submit(Some(encoder.finish()));
