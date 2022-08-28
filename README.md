@@ -15,10 +15,15 @@ And then `cargo build`.
 
 ## Running
 
-Transcode 120fps mjpeg stream to YUV 4:2:2
-`ffmpeg -re -input_format mjpeg -framerate 120 -i /dev/video0 -pix_fmt yuv420p -f v4l2 /dev/video2`
+The camera I'm using is: "Arducam 120fps Global Shutter USB Camera Board, 1MP 720P OV9281 UVC Webcam Module with Low Distortion M12 Lens". Other monochrome high-speed global shutter cameras should also work.
 
-Run against decoded stream
+Create a loopback video device
+`sudo modprobe v4l2loopback devices=1 video_nr=2 card_label="Fake" exclusive_caps=1`
+
+Extract luminance channel from 120fps mjpeg stream and provide raw stream on fake device
+`ffmpeg -re -input_format mjpeg -framerate 120 -i /dev/video0 -vcodec rawvideo -pix_fmt gray -f v4l2 /dev/video2`
+
+Run against raw stream
 `cargo run -- /dev/video2`
 
 ## License
