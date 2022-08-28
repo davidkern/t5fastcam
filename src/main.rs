@@ -48,7 +48,7 @@ fn main() -> Result<()> {
 
     let (width, height) = show_device_info(&device)?;
 
-    let (video_sender, video_receiver) = sync_channel(1);
+    let (video_sender, video_receiver) = sync_channel(1200);
 
     run_capture_thread(device, video_sender);
 

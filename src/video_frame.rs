@@ -1,4 +1,4 @@
 pub struct VideoFrame {
-    pub sequence: u32,
+    pub timestamp: f32,
     pub data: Vec<u8>,
 }

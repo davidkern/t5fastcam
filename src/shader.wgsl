@@ -3,8 +3,8 @@ struct VertexOutput {
     @location(0) texture_uv: vec2<f32>,
 }
 
-struct SequenceUniform {
-    sequence: u32,
+struct PhaseUniform {
+    phase: f32,
 }
 
 @vertex
@@ -33,7 +33,7 @@ var t_video: texture_2d<f32>;
 @group(0) @binding(1)
 var s_video: sampler;
 @group(0) @binding(2)
-var<uniform> u_sequence: SequenceUniform;
+var<uniform> u_phase: PhaseUniform;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
@@ -42,9 +42,19 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         vec3<f32>(0.0, 1.0, 0.0),
         vec3<f32>(0.0, 0.0, 1.0)
     );
-    let phase = u32(u_sequence.sequence) % 3u;
-    let color = color_wheel[phase];
+    var color = vec3<f32>(0.0, 0.0, 0.0);
+
+    if u_phase.phase < 1.0 {
+        color = color_wheel[0];
+    }
+    
+    // else if u_phase.phase < 2.0 {
+    //     color = color_wheel[1];
+    // } else {
+    //    color = color_wheel[2];
+    // }
 
     let lum = textureSample(t_video, s_video, in.texture_uv)[0];
     return vec4<f32>(lum*color[0], lum*color[1], lum*color[2], 1.0);
+    // return vec4<f32>(lum*u_phase.phase/3.0, lum*u_phase.phase/3.0, lum*u_phase.phase/3.0, 1.0);
 }

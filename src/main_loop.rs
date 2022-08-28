@@ -8,6 +8,7 @@ use winit::{
     window::Window,
 };
 use wgpu::util::DeviceExt;
+use std::time::Instant;
 
 
 pub async fn run(
@@ -84,17 +85,17 @@ pub async fn run(
 
     #[repr(C)]
     #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-    struct SequenceUniform {
-        sequence: u32,
+    struct PhaseUniform {
+        phase: f32,
     }
 
-    let mut sequence_uniform = SequenceUniform { sequence: 0 };
+    let mut phase_uniform = PhaseUniform { phase: 0.0 };
 
-    let sequence_buffer = device.create_buffer_init(
+    let phase_buffer = device.create_buffer_init(
         &wgpu::util::BufferInitDescriptor {
-            contents: bytemuck::cast_slice(&[sequence_uniform]),
+            contents: bytemuck::cast_slice(&[phase_uniform]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            label: Some("sequence_buffer"),
+            label: Some("phase_buffer"),
         }
     );
 
@@ -144,7 +145,7 @@ pub async fn run(
             },
             wgpu::BindGroupEntry {
                 binding: 2,
-                resource: sequence_buffer.as_entire_binding(),
+                resource: phase_buffer.as_entire_binding(),
             }
         ],
         label: Some("video_bind_group"),
@@ -225,11 +226,13 @@ pub async fn run(
                 match video_receiver.try_recv() {
                     Ok(frame) => {
                         if render_enabled {
-                            sequence_uniform.sequence = frame.sequence;
+                            let frame_seq = frame.timestamp / (1.0 / 120.0);
+                            phase_uniform.phase = (frame_seq % 3.0) as f32;
+                            println!("{:?}", (frame.timestamp, frame_seq, phase_uniform.phase));
                             queue.write_buffer(
-                                &sequence_buffer,
+                                &phase_buffer,
                                 0,
-                                bytemuck::cast_slice(&[sequence_uniform])
+                                bytemuck::cast_slice(&[phase_uniform])
                             );
                             queue.write_texture(
                                 wgpu::ImageCopyTexture {
